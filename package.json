@@ -10,11 +10,10 @@
   },
   "dependencies": {
     "clsx": "^2.1.1",
-    "dommatrix": "^0.1.1",
+    "docutext": "^1.2.1",
     "jspdf": "^4.2.1",
     "next": "16.2.4",
     "openai": "^6.35.0",
-    "pdf2json": "^4.0.3",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-dropzone": "^15.0.0",

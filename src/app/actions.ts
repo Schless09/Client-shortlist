@@ -1,9 +1,7 @@
 "use server";
 
-import "@/lib/pdf-server-globals";
-
+import { DocuText } from "docutext";
 import OpenAI from "openai";
-import PDFParser from "pdf2json";
 
 const SYSTEM_PROMPT =
   "You are a top-tier recruitment consultant writing sharp, client-ready candidate briefs. Be concise, commercial, and insightful. Avoid generic language.";
@@ -33,40 +31,13 @@ function getOpenAIClient() {
 }
 
 async function extractPdfText(pdfBuffer: Buffer): Promise<string> {
-  const pdfParser = new PDFParser(null, true);
-
-  const text = await new Promise<string>((resolve, reject) => {
-    const onDataError = (err: unknown) => {
-      cleanup();
-      reject(err instanceof Error ? err : new Error("Failed to parse PDF."));
-    };
-
-    const onDataReady = () => {
-      try {
-        cleanup();
-        resolve(String(pdfParser.getRawTextContent() ?? "").trim());
-      } catch (e) {
-        cleanup();
-        reject(e instanceof Error ? e : new Error("Failed to read PDF text."));
-      }
-    };
-
-    const cleanup = () => {
-      pdfParser.removeListener("pdfParser_dataError", onDataError);
-      pdfParser.removeListener("pdfParser_dataReady", onDataReady);
-      try {
-        pdfParser.destroy();
-      } catch {
-        // ignore
-      }
-    };
-
-    pdfParser.on("pdfParser_dataError", onDataError);
-    pdfParser.on("pdfParser_dataReady", onDataReady);
-    pdfParser.parseBuffer(pdfBuffer, 0);
-  });
-
-  return text;
+  let doc: DocuText | null = null;
+  try {
+    doc = DocuText.fromBuffer(new Uint8Array(pdfBuffer));
+    return doc.text.trim();
+  } finally {
+    doc?.dispose();
+  }
 }
 
 export async function generateClientBrief(formData: FormData): Promise<BriefResult> {
