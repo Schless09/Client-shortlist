@@ -1,6 +1,7 @@
 "use server";
 
 import OpenAI from "openai";
+import PDFParser from "pdf2json";
 
 const SYSTEM_PROMPT =
   "You are a top-tier recruitment consultant writing sharp, client-ready candidate briefs. Be concise, commercial, and insightful. Avoid generic language.";
@@ -30,33 +31,42 @@ function getOpenAIClient() {
 }
 
 async function extractPdfText(pdfBuffer: Buffer): Promise<string> {
-  // Use the legacy Node build to avoid browser-only APIs (e.g. DOMMatrix).
-  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  // In Node, pdf.js disables real workers and falls back to a "fake worker",
-  // which still needs the WorkerMessageHandler module available.
-  // Preload it and attach to the global so pdf.js won't try to resolve `pdf.worker.*` by path.
-  if (!("pdfjsWorker" in globalThis)) {
-    const worker = await import("pdfjs-dist/legacy/build/pdf.worker.mjs");
-    (globalThis as unknown as { pdfjsWorker?: unknown }).pdfjsWorker = worker;
-  }
+  // `pdfjs-dist` can still touch browser globals (e.g. DOMMatrix) depending on runtime/bundling.
+  // `pdf2json` is a Node-first parser and avoids pulling `pdfjs-dist` into the server action.
+  const pdfParser = new PDFParser(null, true);
 
-  const loadingTask = pdfjs.getDocument({
-    data: new Uint8Array(pdfBuffer),
+  const text = await new Promise<string>((resolve, reject) => {
+    const onDataError = (err: unknown) => {
+      cleanup();
+      reject(err instanceof Error ? err : new Error("Failed to parse PDF."));
+    };
+
+    const onDataReady = () => {
+      try {
+        cleanup();
+        resolve(String(pdfParser.getRawTextContent() ?? "").trim());
+      } catch (e) {
+        cleanup();
+        reject(e instanceof Error ? e : new Error("Failed to read PDF text."));
+      }
+    };
+
+    const cleanup = () => {
+      pdfParser.removeListener("pdfParser_dataError", onDataError);
+      pdfParser.removeListener("pdfParser_dataReady", onDataReady);
+      try {
+        pdfParser.destroy();
+      } catch {
+        // ignore
+      }
+    };
+
+    pdfParser.on("pdfParser_dataError", onDataError);
+    pdfParser.on("pdfParser_dataReady", onDataReady);
+    pdfParser.parseBuffer(pdfBuffer, 0);
   });
 
-  const doc = await loadingTask.promise;
-  let out = "";
-
-  for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
-    const page = await doc.getPage(pageNum);
-    const content = await page.getTextContent();
-    const parts = (content.items as Array<Record<string, unknown>>)
-      .map((item) => (typeof item.str === "string" ? item.str : ""))
-      .filter(Boolean);
-    out += parts.join(" ") + "\n";
-  }
-
-  return out.trim();
+  return text;
 }
 
 export async function generateClientBrief(formData: FormData): Promise<BriefResult> {
