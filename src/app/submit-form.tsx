@@ -3,8 +3,8 @@
 import * as React from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { jsPDF } from "jspdf";
 
+import { PdfIframePreview } from "@/components/PdfIframePreview";
 import { PdfDropzone } from "@/components/PdfDropzone";
 import { Button } from "@/components/ui/Button";
 import {
@@ -30,14 +30,9 @@ export default function HomeForm() {
   const [state, setState] = React.useState<ActionState>({ status: "idle" });
   const [copied, setCopied] = React.useState(false);
   const [downloading, setDownloading] = React.useState(false);
-  const pdfUrl = React.useMemo(() => (pdf ? URL.createObjectURL(pdf) : null), [pdf]);
-  React.useEffect(() => {
-    return () => {
-      if (pdfUrl) URL.revokeObjectURL(pdfUrl);
-    };
-  }, [pdfUrl]);
 
-  function downloadBriefPdf(brief: string) {
+  async function downloadBriefPdf(brief: string) {
+    const { jsPDF } = await import("jspdf");
     // Simple, readable “exec report” layout: headings, body text, bullets.
     const doc = new jsPDF({ unit: "pt", format: "a4" });
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -151,17 +146,7 @@ export default function HomeForm() {
           </CardHeader>
           <CardContent className="pt-2">
             <div className="overflow-hidden rounded-xl bg-gradient-to-b from-zinc-50 to-white ring-1 ring-zinc-900/10 dark:from-zinc-50 dark:to-white dark:ring-zinc-900/10">
-              {pdfUrl ? (
-                <iframe
-                  title="Uploaded PDF preview"
-                  src={`${pdfUrl}#view=FitH&toolbar=0&navpanes=0`}
-                  className="h-[70vh] w-full"
-                />
-              ) : (
-                <div className="flex h-[70vh] w-full items-center justify-center p-8 text-sm text-zinc-600 dark:text-zinc-600">
-                  No PDF selected.
-                </div>
-              )}
+              <PdfIframePreview file={pdf} />
             </div>
           </CardContent>
         </Card>
@@ -287,7 +272,7 @@ export default function HomeForm() {
                     onClick={async () => {
                       try {
                         setDownloading(true);
-                        downloadBriefPdf(state.brief);
+                        await downloadBriefPdf(state.brief);
                       } catch (e) {
                         const message = e instanceof Error ? e.message : "Couldn’t generate the PDF.";
                         setState({ status: "error", message });

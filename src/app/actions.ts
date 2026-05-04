@@ -1,5 +1,7 @@
 "use server";
 
+import "@/lib/pdf-server-globals";
+
 import OpenAI from "openai";
 import PDFParser from "pdf2json";
 
@@ -31,8 +33,6 @@ function getOpenAIClient() {
 }
 
 async function extractPdfText(pdfBuffer: Buffer): Promise<string> {
-  // `pdfjs-dist` can still touch browser globals (e.g. DOMMatrix) depending on runtime/bundling.
-  // `pdf2json` is a Node-first parser and avoids pulling `pdfjs-dist` into the server action.
   const pdfParser = new PDFParser(null, true);
 
   const text = await new Promise<string>((resolve, reject) => {
